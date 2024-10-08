@@ -9,7 +9,7 @@ class BarcodeScannerApp:
         master.title("Barcode Check In/Out")
         
         # Set window size to 600x400
-        master.geometry("600x400")
+        master.geometry("900x900")
         
         # Set window background color to white
         master.configure(bg="white")
