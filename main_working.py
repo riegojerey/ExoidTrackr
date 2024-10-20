@@ -26,33 +26,37 @@ class BarcodeApp(QMainWindow):
         # Branding (Logo instead of text)
         self.logo_label = QLabel(self)
         pixmap = QPixmap("logo.png")  # Make sure the logo is in the correct path
-        self.logo_label.setPixmap(pixmap.scaled(326, 51, Qt.KeepAspectRatio))  # Set the logo size
+
+        # Scale the logo to a more appropriate size for the app header
+        self.logo_label.setPixmap(pixmap.scaled(300, 300, Qt.KeepAspectRatio))  # Width: 300px, Height: proportional
         self.logo_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.logo_label, alignment=Qt.AlignCenter)
 
         # Create Barcode button
-        self.create_barcode_button = QPushButton("Create a Barcode")
+        self.create_barcode_button = QPushButton("Generate a Database Barcodes")
         self.create_barcode_button.setFont(QFont("Arial", 12, QFont.Bold))
         self.create_barcode_button.setStyleSheet("""
             background-color: #ff9800;
-            color: black;
+            color: white;
             border: 2px solid #ff9800;
             border-radius: 15px;
             padding: 10px 20px;
         """)
+        self.create_barcode_button.setCursor(Qt.PointingHandCursor)  # Change cursor on hover
         self.create_barcode_button.clicked.connect(self.open_create_barcode_window)
         layout.addWidget(self.create_barcode_button)
 
         # Scan Barcode button
-        self.scan_barcode_button = QPushButton("Scan a Barcode")
+        self.scan_barcode_button = QPushButton("Scan Barcodes")
         self.scan_barcode_button.setFont(QFont("Arial", 12, QFont.Bold))
         self.scan_barcode_button.setStyleSheet("""
             background-color: #ff9800;
-            color: black;
+            color: white;
             border: 2px solid #ff9800;
             border-radius: 15px;
             padding: 10px 20px;
         """)
+        self.scan_barcode_button.setCursor(Qt.PointingHandCursor)  # Change cursor on hover
         self.scan_barcode_button.clicked.connect(self.scan_barcode)
         layout.addWidget(self.scan_barcode_button)
 
@@ -86,6 +90,7 @@ class BarcodeApp(QMainWindow):
             border-radius: 15px;
             padding: 10px 20px;
         """)
+        add_entry_button.setCursor(Qt.PointingHandCursor)  # Change cursor on hover
         add_entry_button.clicked.connect(self.add_item)
         form_layout.addWidget(add_entry_button)
 
@@ -98,6 +103,7 @@ class BarcodeApp(QMainWindow):
             border-radius: 15px;
             padding: 10px 20px;
         """)
+        save_barcode_button.setCursor(Qt.PointingHandCursor)  # Change cursor on hover
         save_barcode_button.clicked.connect(self.save_barcodes)
         form_layout.addWidget(save_barcode_button)
 
