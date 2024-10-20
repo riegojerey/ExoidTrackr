@@ -1,125 +1,173 @@
-import tkinter as tk
-from tkinter import filedialog, messagebox
+import sys
+import os
+import io
 import pandas as pd
+import code128
 from openpyxl import Workbook
 from openpyxl.drawing.image import Image as OpenpyxlImage
-import code128
-import io
-import os
+from PyQt5.QtWidgets import (QApplication, QMainWindow, QPushButton, 
+                             QVBoxLayout, QWidget, QFileDialog, QMessageBox, 
+                             QTableWidget, QTableWidgetItem, QHeaderView, QLabel)
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QFont
 
-class BarcodeApp:
-    def __init__(self, master):
-        self.master = master
-        master.title("Barcode Management App")
-        
-        # Set window size
-        master.geometry("400x200")
-        
-        # Set window background color
-        master.configure(bg="white")
+class BarcodeApp(QMainWindow):
+    def __init__(self):
+        super().__init__()
 
-        # Create buttons
-        self.create_barcode_button = tk.Button(master, text="Create a Barcode", command=self.open_create_barcode_window, 
-                                                bg="#ff9800", fg="black", font=("Arial", 12, "bold"))
-        self.create_barcode_button.pack(pady=20)
+        # Window settings
+        self.setWindowTitle("ToolsTrackr - Barcode Management App")
+        self.setGeometry(100, 100, 500, 400)
+        self.setStyleSheet("background-color: white;")
 
-        self.scan_barcode_button = tk.Button(master, text="Scan a Barcode", command=self.scan_barcode, 
-                                              bg="#ff9800", fg="black", font=("Arial", 12, "bold"))
-        self.scan_barcode_button.pack(pady=20)
+        # Main layout
+        layout = QVBoxLayout()
+
+        # Branding
+        self.branding_label = QLabel("ToolsTrackr", self)
+        self.branding_label.setFont(QFont("Arial", 24, QFont.Bold))
+        self.branding_label.setStyleSheet("color: #ff9800;")
+        layout.addWidget(self.branding_label, alignment=Qt.AlignCenter)
+
+        # Create Barcode button
+        self.create_barcode_button = QPushButton("Create a Barcode")
+        self.create_barcode_button.setFont(QFont("Arial", 12, QFont.Bold))
+        self.create_barcode_button.setStyleSheet("""
+            background-color: #ff9800;
+            color: black;
+            border: 2px solid #ff9800;
+            border-radius: 15px;
+            padding: 10px 20px;
+        """)
+        self.create_barcode_button.clicked.connect(self.open_create_barcode_window)
+        layout.addWidget(self.create_barcode_button)
+
+        # Scan Barcode button
+        self.scan_barcode_button = QPushButton("Scan a Barcode")
+        self.scan_barcode_button.setFont(QFont("Arial", 12, QFont.Bold))
+        self.scan_barcode_button.setStyleSheet("""
+            background-color: #ff9800;
+            color: black;
+            border: 2px solid #ff9800;
+            border-radius: 15px;
+            padding: 10px 20px;
+        """)
+        self.scan_barcode_button.clicked.connect(self.scan_barcode)
+        layout.addWidget(self.scan_barcode_button)
+
+        # Central widget for the main window
+        container = QWidget()
+        container.setLayout(layout)
+        self.setCentralWidget(container)
 
     def open_create_barcode_window(self):
-        self.create_window = tk.Toplevel(self.master)
-        self.create_window.title("Create Barcodes")
-        self.create_window.geometry("500x500")
+        self.create_window = QMainWindow(self)
+        self.create_window.setWindowTitle("Create Barcodes")
+        self.create_window.setGeometry(100, 100, 500, 400)
+        self.create_window.setStyleSheet("background-color: white;")
 
-        self.input_frame = tk.Frame(self.create_window)
-        self.input_frame.pack(pady=20)
+        form_layout = QVBoxLayout()
 
-        self.entries = []  # List to hold input entries
-        
-        # Add initial entry fields
-        self.add_entry()
+        # Table to display the form-like data
+        self.table = QTableWidget()
+        self.table.setColumnCount(2)  # Item Code and Description
+        self.table.setHorizontalHeaderLabels(['Item Code', 'Description'])
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.table.setRowCount(1)  # Start with one row
+        form_layout.addWidget(self.table)
 
-        # Add buttons
-        self.add_entry_button = tk.Button(self.create_window, text="Add Item", command=self.add_entry)
-        self.add_entry_button.pack(pady=5)
+        # Add Item button
+        add_entry_button = QPushButton("Add Item")
+        add_entry_button.setStyleSheet("""
+            background-color: #ff9800;
+            color: black;
+            border: 2px solid #ff9800;
+            border-radius: 15px;
+            padding: 10px 20px;
+        """)
+        add_entry_button.clicked.connect(self.add_item)
+        form_layout.addWidget(add_entry_button)
 
-        self.save_barcode_button = tk.Button(self.create_window, text="Save Barcodes in Excel", command=self.save_barcodes)
-        self.save_barcode_button.pack(pady=5)
+        # Save Barcodes button
+        save_barcode_button = QPushButton("Save Barcodes in Excel")
+        save_barcode_button.setStyleSheet("""
+            background-color: #ff9800;
+            color: black;
+            border: 2px solid #ff9800;
+            border-radius: 15px;
+            padding: 10px 20px;
+        """)
+        save_barcode_button.clicked.connect(self.save_barcodes)
+        form_layout.addWidget(save_barcode_button)
 
-    def add_entry(self):
-        entry_frame = tk.Frame(self.input_frame)
-        entry_frame.pack(pady=5)
+        # Set layout for the window
+        container = QWidget()
+        container.setLayout(form_layout)
+        self.create_window.setCentralWidget(container)
+        self.create_window.show()
 
-        item_code_entry = self.create_placeholder_entry(entry_frame, "Item Code")
-        description_entry = self.create_placeholder_entry(entry_frame, "Description")
+    def add_item(self):
+        # Add a new row to the table
+        row_position = self.table.rowCount()
+        self.table.insertRow(row_position)
 
-        self.entries.append((item_code_entry, description_entry))
+        # Make the cells editable and set placeholders
+        item_code_item = QTableWidgetItem()
+        item_code_item.setPlaceholderText("Item Code")
+        self.table.setItem(row_position, 0, item_code_item)
 
-    def create_placeholder_entry(self, parent, placeholder):
-        entry = tk.Entry(parent, width=15)
-        entry.pack(side=tk.LEFT, padx=5)
+        description_item = QTableWidgetItem()
+        description_item.setPlaceholderText("Description")
+        self.table.setItem(row_position, 1, description_item)
 
-        # Set the placeholder text
-        entry.insert(0, placeholder)
-        entry.bind("<FocusIn>", lambda event: self.clear_placeholder(event, placeholder))
-        entry.bind("<FocusOut>", lambda event: self.set_placeholder(event, placeholder))
-        
-        return entry
-
-    def clear_placeholder(self, event, placeholder):
-        if event.widget.get() == placeholder:
-            event.widget.delete(0, tk.END)  # Clear the entry field
-
-    def set_placeholder(self, event, placeholder):
-        if event.widget.get() == '':
-            event.widget.insert(0, placeholder)  # Set the placeholder back if empty
+        # Optionally, set focus to the first cell for easy editing
+        self.table.setCurrentCell(row_position, 0)
 
     def save_barcodes(self):
-        # Ask for the directory to save Excel
-        save_dir = filedialog.askdirectory(title="Select Directory to Save Excel")
+        # Open dialog to select directory
+        save_dir = QFileDialog.getExistingDirectory(self, "Select Directory to Save Excel")
         if not save_dir:
-            messagebox.showwarning("No Directory Selected", "Please select a directory to save the Excel file.")
+            QMessageBox.warning(self, "No Directory Selected", "Please select a directory.")
             return
 
         excel_file_path = os.path.join(save_dir, "database_with_barcodes.xlsx")
 
-        # Create a new workbook and select the active worksheet
+        # Create new workbook
         wb = Workbook()
         ws = wb.active
         ws.append(['Item Code', 'Description', 'Barcode'])
 
-        # Generate barcodes for each entry
-        for item_code_entry, description_entry in self.entries:
-            item_code = item_code_entry.get().strip()
-            description = description_entry.get().strip()
-            if item_code and item_code != "Item Code":  # Avoid saving placeholder text
-                # Add item code and description to Excel
+        # Loop through the table and collect item codes and descriptions
+        for row in range(self.table.rowCount()):
+            item_code = self.table.item(row, 0).text().strip()
+            description = self.table.item(row, 1).text().strip()
+
+            if item_code:
                 ws.append([item_code, description])
 
-                # Generate barcode image using the code128 library
+                # Generate barcode
                 barcode_image = code128.image(item_code)
                 image_stream = io.BytesIO()
                 barcode_image.save(image_stream, format='PNG')
                 image_stream.seek(0)
 
-                # Insert barcode image into the Excel file
                 img = OpenpyxlImage(image_stream)
-                cell_address = f'C{ws.max_row}'  # Calculate the cell address where the image will be placed
-                img.anchor = cell_address  # Anchor the image using the cell address as a string
+                cell_address = f'C{ws.max_row}'  # Place image in the third column
+                img.anchor = cell_address
                 ws.add_image(img)
 
-                # Set the row height to accommodate the barcode image
-                ws.row_dimensions[ws.max_row].height = 90  # Adjust height as needed
+                # Adjust row height for barcode
+                ws.row_dimensions[ws.max_row].height = 90
 
-        # Save the workbook
         wb.save(excel_file_path)
-        messagebox.showinfo("Success", f"Barcode information saved to {excel_file_path}.")
+        QMessageBox.information(self, "Success", f"Data saved to {excel_file_path}")
 
     def scan_barcode(self):
-        os.system('py scan.py') 
+        os.system('py scan.py')  # This calls the external script for scanning
 
+# Application entry point
 if __name__ == "__main__":
-    root = tk.Tk()
-    app = BarcodeApp(root)
-    root.mainloop()
+    app = QApplication(sys.argv)
+    window = BarcodeApp()
+    window.show()
+    sys.exit(app.exec_())
