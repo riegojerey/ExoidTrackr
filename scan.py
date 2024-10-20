@@ -17,6 +17,7 @@ class BarcodeScannerApp(QMainWindow):
 
         # Branding with logo
         self.logo_label = QLabel(self)
+        # Adjust the logo size as per your needs
         self.logo_pixmap = QtGui.QPixmap("logo.png").scaled(326, 250, QtCore.Qt.KeepAspectRatio)
         self.logo_label.setPixmap(self.logo_pixmap)
         self.layout.addWidget(self.logo_label, alignment=QtCore.Qt.AlignLeft)
@@ -209,13 +210,16 @@ class BarcodeScannerApp(QMainWindow):
         file_dialog = QFileDialog(self)
         file_path, _ = file_dialog.getSaveFileName(self, "Save Excel File", "", "Excel Files (*.xlsx)")
         if file_path:
-            try:
-                export_df = pd.DataFrame.from_dict(self.items, orient='index')
-                export_df.to_excel(file_path)
-                QMessageBox.information(self, "Export Successful", "Inventory data exported successfully.")
-            except Exception as e:
-                QMessageBox.critical(self, "Error", f"Failed to export data: {e}")
+            export_data = []
+            for item_code, data in self.items.items():
+                export_data.append([item_code, data['Description'], data['Status'], data['Quantity']])
 
+            df = pd.DataFrame(export_data, columns=["Item Code", "Description", "Status", "Quantity"])
+            try:
+                df.to_excel(file_path, index=False)
+                QMessageBox.information(self, "Export Successful", "Data successfully exported to Excel.")
+            except Exception as e:
+                QMessageBox.critical(self, "Export Failed", f"Failed to export data: {e}")
 
 if __name__ == '__main__':
     app = QtWidgets.QApplication(sys.argv)
