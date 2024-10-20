@@ -1,261 +1,181 @@
-import tkinter as tk
-from tkinter import filedialog, simpledialog
-from tkinter import ttk, messagebox
+import sys
+import os
+import io
 import pandas as pd
+import code128
+from openpyxl import Workbook
+from openpyxl.drawing.image import Image as OpenpyxlImage
+from PyQt5.QtWidgets import (QApplication, QMainWindow, QPushButton, 
+                             QVBoxLayout, QWidget, QFileDialog, QMessageBox, 
+                             QTableWidget, QTableWidgetItem, QHeaderView, QLabel)
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QFont, QPixmap
 
-class BarcodeScannerApp:
-    def __init__(self, master):
-        self.master = master
-        master.title("ToolsNet - Inventory Management System")
-        
-        # Set window size to 900x900
-        master.geometry("900x900")
-        
-        # Set window background color to white
-        master.configure(bg="white")
+class BarcodeApp(QMainWindow):
+    def __init__(self):
+        super().__init__()
 
-        # Branding label for ToolsNet at the top
-        self.branding_label = tk.Label(master, text="ToolsNet", 
-                                       font=("Arial", 24, "bold"), bg="white", fg="#ff9800")
-        self.branding_label.pack(pady=10)
+        # Window settings
+        self.setWindowTitle("ToolsTrackr - Barcode Management App")
+        self.setGeometry(100, 100, 500, 400)
+        self.setStyleSheet("background-color: white;")
 
-        # Subtitle or description for the app
-        self.description_label = tk.Label(master, text="Inventory Management System for Tools", 
-                                          font=("Arial", 14), bg="white", fg="black")
-        self.description_label.pack(pady=5)
+        # Main layout
+        layout = QVBoxLayout()
 
-        # Label with instructions
-        self.status_label = tk.Label(master, text="Scan a barcode or enter item code", 
-                                     font=("Arial", 16, "bold"), bg="white", fg="black")
-        self.status_label.pack(pady=20)
+        # Branding (Logo instead of text)
+        self.logo_label = QLabel(self)
+        pixmap = QPixmap("logo.png")  # Make sure the logo is in the correct path
+        self.logo_label.setPixmap(pixmap.scaled(326, 51, Qt.KeepAspectRatio))  # Set the logo size
+        self.logo_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.logo_label, alignment=Qt.AlignCenter)
 
-        # Add a toggle button for switching between Check In and Check Out modes
-        self.mode = tk.StringVar(value="Check In")
-        self.toggle_button = tk.Button(master, text="Switch to Check Out", command=self.toggle_mode, 
-                                       bg="#ff9800", fg="black", font=("Arial", 12, "bold"))
-        self.toggle_button.pack(pady=5)
+        # Create Barcode button
+        self.create_barcode_button = QPushButton("Create a Barcode")
+        self.create_barcode_button.setFont(QFont("Arial", 12, QFont.Bold))
+        self.create_barcode_button.setStyleSheet("""
+            background-color: #ff9800;
+            color: black;
+            border: 2px solid #ff9800;
+            border-radius: 15px;
+            padding: 10px 20px;
+        """)
+        self.create_barcode_button.clicked.connect(self.open_create_barcode_window)
+        layout.addWidget(self.create_barcode_button)
 
-        # Export to Excel button
-        self.export_button = tk.Button(master, text="Export to Excel", command=self.export_to_excel, 
-                                       bg="#ff9800", fg="black", font=("Arial", 12, "bold"))
-        self.export_button.pack(pady=5)
+        # Scan Barcode button
+        self.scan_barcode_button = QPushButton("Scan a Barcode")
+        self.scan_barcode_button.setFont(QFont("Arial", 12, QFont.Bold))
+        self.scan_barcode_button.setStyleSheet("""
+            background-color: #ff9800;
+            color: black;
+            border: 2px solid #ff9800;
+            border-radius: 15px;
+            padding: 10px 20px;
+        """)
+        self.scan_barcode_button.clicked.connect(self.scan_barcode)
+        layout.addWidget(self.scan_barcode_button)
 
-        # Entry field for item code with default styling
-        self.item_code_entry = tk.Entry(master, width=30, font=("Arial", 12))
-        self.item_code_entry.pack(pady=10)
-        self.item_code_entry.focus()  # Focus on the entry to allow barcode scanning
+        # Central widget for the main window
+        container = QWidget()
+        container.setLayout(layout)
+        self.setCentralWidget(container)
 
-        # Bind the Enter key to the process function (either Check In or Check Out based on mode)
-        self.item_code_entry.bind("<Return>", self.process_item)
+    def open_create_barcode_window(self):
+        self.create_window = QMainWindow(self)
+        self.create_window.setWindowTitle("Create Barcodes")
+        self.create_window.setGeometry(100, 100, 500, 400)
+        self.create_window.setStyleSheet("background-color: white;")
 
-        # Data structure to hold items and their statuses
-        self.items = {}
+        form_layout = QVBoxLayout()
 
-        # Create a Treeview widget for the overview
-        self.tree = ttk.Treeview(master, columns=("Item Code", "Description", "Status", "Quantity"), show="headings")
-        self.tree.heading("Item Code", text="Item Code")
-        self.tree.heading("Description", text="Description")  # New column for description
-        self.tree.heading("Status", text="Status")
-        self.tree.heading("Quantity", text="Quantity")  # New column for quantity
+        # Table to display the form-like data
+        self.table = QTableWidget()
+        self.table.setColumnCount(2)  # Item Code and Description
+        self.table.setHorizontalHeaderLabels(['Item Code', 'Description'])
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.table.setRowCount(1)  # Start with one row
+        form_layout.addWidget(self.table)
 
-        # Configure column widths
-        self.tree.column("Item Code", width=250)
-        self.tree.column("Description", width=350)  # Set width for the description
-        self.tree.column("Status", width=100)
-        self.tree.column("Quantity", width=100)  # Set width for quantity
+        # Add Item button
+        add_entry_button = QPushButton("Add Item")
+        add_entry_button.setStyleSheet("""
+            background-color: #ff9800;
+            color: black;
+            border: 2px solid #ff9800;
+            border-radius: 15px;
+            padding: 10px 20px;
+        """)
+        add_entry_button.clicked.connect(self.add_item)
+        form_layout.addWidget(add_entry_button)
 
-        self.tree.pack(pady=5, fill=tk.BOTH, expand=True)
+        # Save Barcodes button
+        save_barcode_button = QPushButton("Save Barcodes in Excel")
+        save_barcode_button.setStyleSheet("""
+            background-color: #ff9800;
+            color: black;
+            border: 2px solid #ff9800;
+            border-radius: 15px;
+            padding: 10px 20px;
+        """)
+        save_barcode_button.clicked.connect(self.save_barcodes)
+        form_layout.addWidget(save_barcode_button)
 
-        # Add a scrollbar to the Treeview
-        self.scrollbar = ttk.Scrollbar(master, orient="vertical", command=self.tree.yview)
-        self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        self.tree.configure(yscroll=self.scrollbar.set)
+        # Set layout for the window
+        container = QWidget()
+        container.setLayout(form_layout)
+        self.create_window.setCentralWidget(container)
+        self.create_window.show()
 
-        # Style the Treeview
-        self.tree.tag_configure('checked_in', background="#e8f5e9")  # Light green background
-        self.tree.tag_configure('checked_out', background="#ffebee")  # Light red background
+        # Connect the itemChanged signal to clear the placeholder text
+        self.table.itemChanged.connect(self.clear_placeholder)
 
-        # Create context menu for removing items
-        self.context_menu = tk.Menu(master, tearoff=0)
-        self.context_menu.add_command(label="Remove", command=self.remove_item)
+    def add_item(self):
+        # Add a new row to the table
+        row_position = self.table.rowCount()
+        self.table.insertRow(row_position)
 
-        # Bind right-click event to the Treeview
-        self.tree.bind("<Button-3>", self.show_context_menu)
+        # Create an editable Item Code cell with a placeholder-like text
+        item_code_item = QTableWidgetItem("Item Code")
+        self.table.setItem(row_position, 0, item_code_item)
 
-        # Load Excel file into pandas DataFrame (initialize with None)
-        self.inventory_df = None
-        self.load_excel_data()
+        # Create an editable Description cell with a placeholder-like text
+        description_item = QTableWidgetItem("Description")
+        self.table.setItem(row_position, 1, description_item)
 
-        # Create plus and minus buttons for quantity adjustment
-        self.quantity_frame = tk.Frame(master)
-        self.quantity_frame.pack(pady=10)
+        # Optionally, set focus to the first cell for easy editing
+        self.table.setCurrentCell(row_position, 0)
 
-        self.minus_button = tk.Button(self.quantity_frame, text="-", command=self.decrease_quantity, 
-                                       bg="#ff9800", fg="black", font=("Arial", 12, "bold"))
-        self.minus_button.pack(side=tk.LEFT)
+    def clear_placeholder(self, item):
+        # Check if the item has placeholder text and clear it
+        if item.text() == "Item Code" or item.text() == "Description":
+            item.setText("")  # Clear placeholder text when typing starts
 
-        self.plus_button = tk.Button(self.quantity_frame, text="+", command=self.increase_quantity, 
-                                      bg="#ff9800", fg="black", font=("Arial", 12, "bold"))
-        self.plus_button.pack(side=tk.LEFT)
-
-        # Enable buttons by default
-        self.minus_button.config(state=tk.NORMAL)
-        self.plus_button.config(state=tk.NORMAL)
-
-    def load_excel_data(self):
-        # Prompt the user to select an Excel file
-        file_path = filedialog.askopenfilename(filetypes=[("Excel files", "*.xlsx"), ("All files", "*.*")])
-        if not file_path:
-            messagebox.showerror("Error", "No Excel file selected. Please load a valid file.")
+    def save_barcodes(self):
+        # Open dialog to select directory
+        save_dir = QFileDialog.getExistingDirectory(self, "Select Directory to Save Excel")
+        if not save_dir:
+            QMessageBox.warning(self, "No Directory Selected", "Please select a directory.")
             return
-        
-        try:
-            # Load the Excel file into a pandas DataFrame
-            self.inventory_df = pd.read_excel(file_path)
-            if 'Item Code' not in self.inventory_df.columns or 'Description' not in self.inventory_df.columns:
-                raise ValueError("Excel file must have 'Item Code' and 'Description' columns.")
-            self.inventory_file_path = file_path  # Store the path for saving later
-            messagebox.showinfo("Success", "Excel file loaded successfully.")
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to load Excel file: {e}")
 
-    def toggle_mode(self):
-        if self.mode.get() == "Check In":
-            self.mode.set("Check Out")
-            self.toggle_button.config(text="Switch to Check In")
-            self.status_label.config(text="Scan a barcode or enter item code (Check Out mode)")
-        else:
-            self.mode.set("Check In")
-            self.toggle_button.config(text="Switch to Check Out")
-            self.status_label.config(text="Scan a barcode or enter item code (Check In mode)")
+        excel_file_path = os.path.join(save_dir, "database_with_barcodes.xlsx")
 
-    def show_context_menu(self, event):
-        try:
-            item = self.tree.identify_row(event.y)
-            if item:
-                self.tree.selection_set(item)
-                self.context_menu.post(event.x_root, event.y_root)
-        except Exception as e:
-            print(e)
+        # Create new workbook
+        wb = Workbook()
+        ws = wb.active
+        ws.append(['Item Code', 'Description', 'Barcode'])
 
-    def remove_item(self):
-        selected_item = self.tree.selection()
-        if selected_item:
-            item_code = self.tree.item(selected_item, "values")[0]
-            del self.items[item_code]
-            self.tree.delete(selected_item)
-        else:
-            print("No item selected to remove.")
+        # Loop through the table and collect item codes and descriptions
+        for row in range(self.table.rowCount()):
+            item_code = self.table.item(row, 0).text().strip()
+            description = self.table.item(row, 1).text().strip()
 
-    def export_to_excel(self):
-        file_path = filedialog.asksaveasfilename(defaultextension=".xlsx", 
-                                                 filetypes=[("Excel files", "*.xlsx"), ("All files", "*.*")])
-        if not file_path:
-            return
-        df = pd.DataFrame([(code, details['Description'], details['Status'], details['Quantity']) 
-                            for code, details in self.items.items()], 
-                          columns=["Item Code", "Description", "Status", "Quantity"])
-        df.to_excel(file_path, index=False)
-        messagebox.showinfo("Success", "Data exported to Excel successfully.")
+            if item_code:
+                ws.append([item_code, description])
 
-    def process_item(self, event=None):
-        item_code = self.item_code_entry.get().strip().lower()
+                # Generate barcode
+                barcode_image = code128.image(item_code)
+                image_stream = io.BytesIO()
+                barcode_image.save(image_stream, format='PNG')
+                image_stream.seek(0)
 
-        if not item_code:
-            print("No item code entered.")
-            return
-        
-        # Lookup the item code in the loaded Excel file
-        if self.inventory_df is not None:
-            match = self.inventory_df[self.inventory_df['Item Code'].str.lower() == item_code]
-            if not match.empty:
-                description = match['Description'].values[0]
-                if self.mode.get() == "Check In":
-                    if item_code in self.items:
-                        # If already in items, check the current status
-                        if self.items[item_code]['Status'] == "Checked Out":
-                            self.items[item_code]['Status'] = "Checked In"  # Change status
-                            # No incrementing quantity on status change
-                        else:
-                            # Increment the quantity for the existing checked-in item
-                            self.items[item_code]['Quantity'] += 1
-                    else:
-                        # New item entry
-                        self.items[item_code] = {'Status': "Checked In", 'Description': description, 'Quantity': 1}
-                else:
-                    self.check_out(item_code, description)
-                
-                # Update the overview for the Treeview
-                self.update_overview(item_code)
-            else:
-                # Prompt for a description for unknown item and save it
-                description = self.prompt_for_description(item_code)
-                if description:
-                    self.add_unknown_item_to_database(item_code, description)
-                    self.check_in(item_code, description)  # Check in the unknown item
-        else:
-            print("No inventory data loaded.")
+                img = OpenpyxlImage(image_stream)
+                cell_address = f'C{ws.max_row}'  # Place image in the third column
+                img.anchor = cell_address
+                ws.add_image(img)
 
-        self.item_code_entry.delete(0, tk.END)  # Clear the input field after processing
+                # Adjust row height for barcode
+                ws.row_dimensions[ws.max_row].height = 90
 
-    def check_in(self, item_code, description):
-        if item_code in self.items:
-            # If the item is already checked out, switch it back to checked in without incrementing quantity
-            if self.items[item_code]['Status'] == "Checked Out":
-                self.items[item_code]['Status'] = "Checked In"
-                # No increment on quantity here
-            else:
-                self.items[item_code]['Quantity'] += 1  # Increment quantity if already checked in
-        else:
-            # Add a new item if it doesn't exist
-            self.items[item_code] = {'Status': "Checked In", 'Description': description, 'Quantity': 1}
-        self.update_overview(item_code)
+        wb.save(excel_file_path)
+        QMessageBox.information(self, "Success", f"Data saved to {excel_file_path}")
 
-    def check_out(self, item_code, description):
-        if item_code in self.items:
-            self.items[item_code]['Status'] = "Checked Out"  # Update status to Checked Out
-        else:
-            self.items[item_code] = {'Status': "Checked Out", 'Description': description, 'Quantity': 1}
-        self.update_overview(item_code)
+    def scan_barcode(self):
+        os.system('py scan.py')  # This calls the external script for scanning
 
-    def update_overview(self, item_code):
-        # Clear the Treeview before updating
-        for item in self.tree.get_children():
-            self.tree.delete(item)
-
-        for code, details in self.items.items():
-            if details['Status'] == "Checked In":
-                self.tree.insert("", tk.END, values=(code, details['Description'], details['Status'], details['Quantity']), tags=('checked_in',))
-            else:
-                self.tree.insert("", tk.END, values=(code, details['Description'], details['Status'], details['Quantity']), tags=('checked_out',))
-
-    def prompt_for_description(self, item_code):
-        return simpledialog.askstring("Unknown Item", f"Enter a description for the item code: {item_code}")
-
-    def add_unknown_item_to_database(self, item_code, description):
-        new_row = pd.DataFrame([[item_code, description]], columns=["Item Code", "Description"])
-        self.inventory_df = pd.concat([self.inventory_df, new_row], ignore_index=True)
-        # Save the updated DataFrame back to Excel
-        self.inventory_df.to_excel(self.inventory_file_path, index=False)
-        messagebox.showinfo("Success", f"Item {item_code} added to the database.")
-
-    def increase_quantity(self):
-        selected_item = self.tree.selection()
-        if selected_item:
-            item_code = self.tree.item(selected_item, "values")[0]
-            if item_code in self.items:
-                self.items[item_code]['Quantity'] += 1  # Increase quantity by 1
-                self.update_overview(item_code)  # Update the Treeview
-
-    def decrease_quantity(self):
-        selected_item = self.tree.selection()
-        if selected_item:
-            item_code = self.tree.item(selected_item, "values")[0]
-            if item_code in self.items and self.items[item_code]['Quantity'] > 0:
-                self.items[item_code]['Quantity'] -= 1  # Decrease quantity by 1
-                self.update_overview(item_code)  # Update the Treeview
-
+# Application entry point
 if __name__ == "__main__":
-    root = tk.Tk()
-    app = BarcodeScannerApp(root)
-    root.mainloop()
+    app = QApplication(sys.argv)
+    window = BarcodeApp()
+    window.show()
+    sys.exit(app.exec_())
