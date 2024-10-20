@@ -17,7 +17,7 @@ class BarcodeScannerApp(QMainWindow):
 
         # Branding with logo
         self.logo_label = QLabel(self)
-        self.logo_pixmap = QtGui.QPixmap("logo.png").scaled(326, 51, QtCore.Qt.KeepAspectRatio)
+        self.logo_pixmap = QtGui.QPixmap("logo.png").scaled(326, 250, QtCore.Qt.KeepAspectRatio)
         self.logo_label.setPixmap(self.logo_pixmap)
         self.layout.addWidget(self.logo_label, alignment=QtCore.Qt.AlignLeft)
 
@@ -42,6 +42,7 @@ class BarcodeScannerApp(QMainWindow):
             border-radius: 15px;
             padding: 10px 20px;
         """)
+        self.toggle_button.setCursor(QtCore.Qt.PointingHandCursor)  # Change cursor on hover
         self.toggle_button.clicked.connect(self.toggle_mode)
         self.layout.addWidget(self.toggle_button)
 
@@ -55,6 +56,7 @@ class BarcodeScannerApp(QMainWindow):
             border-radius: 15px;
             padding: 10px 20px;
         """)
+        self.export_button.setCursor(QtCore.Qt.PointingHandCursor)  # Change cursor on hover
         self.export_button.clicked.connect(self.export_to_excel)
         self.layout.addWidget(self.export_button)
 
@@ -206,17 +208,16 @@ class BarcodeScannerApp(QMainWindow):
 
         file_dialog = QFileDialog(self)
         file_path, _ = file_dialog.getSaveFileName(self, "Save Excel File", "", "Excel Files (*.xlsx)")
-        if not file_path:
-            return
+        if file_path:
+            try:
+                export_df = pd.DataFrame.from_dict(self.items, orient='index')
+                export_df.to_excel(file_path)
+                QMessageBox.information(self, "Export Successful", "Inventory data exported successfully.")
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to export data: {e}")
 
-        try:
-            df = pd.DataFrame.from_dict(self.items, orient='index')
-            df.to_excel(file_path, index=False)
-            QMessageBox.information(self, "Success", "File exported successfully.")
-        except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to export to Excel: {e}")
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     app = QtWidgets.QApplication(sys.argv)
     window = BarcodeScannerApp()
     window.show()
