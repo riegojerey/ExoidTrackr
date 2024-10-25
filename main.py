@@ -5,9 +5,11 @@ import pandas as pd
 import code128
 from openpyxl import Workbook
 from openpyxl.drawing.image import Image as OpenpyxlImage
+from PyQt5 import QtWidgets, QtGui, QtCore
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QPushButton, 
                              QVBoxLayout, QWidget, QFileDialog, QMessageBox, 
-                             QTableWidget, QTableWidgetItem, QHeaderView, QLabel)
+                             QTableWidget, QTableWidgetItem, QHeaderView, QLabel, 
+                             QLineEdit)
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont, QPixmap
 
@@ -62,7 +64,7 @@ class BarcodeApp(QMainWindow):
             padding: 10px 20px;
         """)
         self.scan_barcode_button.setCursor(Qt.PointingHandCursor)  # Change cursor on hover
-        self.scan_barcode_button.clicked.connect(self.scan_barcode)
+        self.scan_barcode_button.clicked.connect(self.open_scan_barcode_window)
         layout.addWidget(self.scan_barcode_button)
 
         # Central widget for the main window
@@ -78,124 +80,175 @@ class BarcodeApp(QMainWindow):
             return os.path.join(os.path.dirname(__file__), relative_path)
 
     def open_create_barcode_window(self):
-        self.create_window = QMainWindow(self)
-        self.create_window.setWindowTitle("Create Barcodes")
-        self.create_window.setGeometry(100, 100, 500, 400)
-        self.create_window.setStyleSheet("background-color: white;")
+        # Logic for creating barcode
+        pass
+
+    def open_scan_barcode_window(self):
+        # This replaces the external scan.py functionality with internal logic
+        self.scan_window = QMainWindow(self)
+        self.scan_window.setWindowTitle("Scan Barcodes")
+        self.scan_window.setGeometry(100, 100, 900, 600)
 
         form_layout = QVBoxLayout()
 
-        # Table to display the form-like data
-        self.table = QTableWidget()
-        self.table.setColumnCount(2)  # Item Code and Description
-        self.table.setHorizontalHeaderLabels(['Item Code', 'Description'])
+        # Logo and status label
+        self.logo_label = QLabel(self)
+        logo_path = self.get_resource_path("logo.png")
+        self.logo_pixmap = QPixmap(logo_path).scaled(326, 250, Qt.KeepAspectRatio)
+        self.logo_label.setPixmap(self.logo_pixmap)
+        form_layout.addWidget(self.logo_label, alignment=Qt.AlignLeft)
+
+        # Status label
+        self.status_label = QLabel("Scan a barcode or enter item code", self)
+        self.status_label.setFont(QFont("Arial", 16, QFont.Bold))
+        self.status_label.setStyleSheet("border-radius: 15px; padding: 10px; background-color: #fff3e0;")
+        form_layout.addWidget(self.status_label, alignment=Qt.AlignCenter)
+
+        # Toggle button
+        self.mode = "Check In"
+        self.toggle_button = QPushButton("Switch to Check Out", self)
+        self.toggle_button.setFont(QFont("Arial", 12, QFont.Bold))
+        self.toggle_button.setStyleSheet("""
+            background-color: #ff9800;
+            color: white;
+            border-radius: 15px;
+            padding: 10px 20px;
+        """)
+        self.toggle_button.clicked.connect(self.toggle_mode)
+        form_layout.addWidget(self.toggle_button)
+
+        # Export to Excel button
+        self.export_button = QPushButton("Export to Excel", self)
+        self.export_button.setFont(QFont("Arial", 12, QFont.Bold))
+        self.export_button.setStyleSheet("""
+            background-color: #ff9800;
+            color: white;
+            border-radius: 15px;
+            padding: 10px 20px;
+        """)
+        self.export_button.clicked.connect(self.export_to_excel)
+        form_layout.addWidget(self.export_button)
+
+        # Input field for item code
+        self.item_code_entry = QLineEdit(self)
+        self.item_code_entry.setFont(QFont("Arial", 12))
+        self.item_code_entry.setStyleSheet("""
+            color: black;
+            background-color: white;
+            border: 1px solid #ccc;
+            border-radius: 10px;
+            padding: 10px;
+        """)
+        self.item_code_entry.setPlaceholderText("Enter item code")
+        self.item_code_entry.returnPressed.connect(self.process_item)
+        form_layout.addWidget(self.item_code_entry)
+
+        # Table widget for displaying items
+        self.table = QTableWidget(self)
+        self.table.setColumnCount(4)
+        self.table.setHorizontalHeaderLabels(["Item Code", "Description", "Status", "Quantity"])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.table.setRowCount(1)  # Start with one row
         form_layout.addWidget(self.table)
 
-        # Add Item button
-        add_entry_button = QPushButton("Add Item")
-        add_entry_button.setStyleSheet("""
-            background-color: #ff9800;
-            color: black;
-            border: 2px solid #ff9800;
-            border-radius: 15px;
-            padding: 10px 20px;
-        """)
-        add_entry_button.setCursor(Qt.PointingHandCursor)  # Change cursor on hover
-        add_entry_button.clicked.connect(self.add_item)
-        form_layout.addWidget(add_entry_button)
+        # Set the layout for scan window
+        scan_container = QWidget()
+        scan_container.setLayout(form_layout)
+        self.scan_window.setCentralWidget(scan_container)
+        self.scan_window.show()
 
-        # Save Barcodes button
-        save_barcode_button = QPushButton("Save Barcodes in Excel")
-        save_barcode_button.setStyleSheet("""
-            background-color: #ff9800;
-            color: black;
-            border: 2px solid #ff9800;
-            border-radius: 15px;
-            padding: 10px 20px;
-        """)
-        save_barcode_button.setCursor(Qt.PointingHandCursor)  # Change cursor on hover
-        save_barcode_button.clicked.connect(self.save_barcodes)
-        form_layout.addWidget(save_barcode_button)
+        # Data structures
+        self.items = {}
+        self.inventory_df = None
 
-        # Set layout for the window
-        container = QWidget()
-        container.setLayout(form_layout)
-        self.create_window.setCentralWidget(container)
-        self.create_window.show()
+        # Load Excel data on startup
+        self.load_excel_data()
 
-        # Connect the itemChanged signal to clear the placeholder text
-        self.table.itemChanged.connect(self.clear_placeholder)
+    def toggle_mode(self):
+        if self.mode == "Check In":
+            self.mode = "Check Out"
+            self.toggle_button.setText("Switch to Check In")
+            self.status_label.setText("Scan a barcode or enter item code (Check Out mode)")
+        else:
+            self.mode = "Check In"
+            self.toggle_button.setText("Switch to Check Out")
+            self.status_label.setText("Scan a barcode or enter item code (Check In mode)")
 
-    def add_item(self):
-        # Add a new row to the table
-        row_position = self.table.rowCount()
-        self.table.insertRow(row_position)
-
-        # Create an editable Item Code cell with a placeholder-like text
-        item_code_item = QTableWidgetItem("Item Code")
-        self.table.setItem(row_position, 0, item_code_item)
-
-        # Create an editable Description cell with a placeholder-like text
-        description_item = QTableWidgetItem("Description")
-        self.table.setItem(row_position, 1, description_item)
-
-        # Optionally, set focus to the first cell for easy editing
-        self.table.setCurrentCell(row_position, 0)
-
-    def clear_placeholder(self, item):
-        # Check if the item has placeholder text and clear it
-        if item.text() == "Item Code" or item.text() == "Description":
-            item.setText("")  # Clear placeholder text when typing starts
-
-    def save_barcodes(self):
-        # Open dialog to select directory
-        save_dir = QFileDialog.getExistingDirectory(self, "Select Directory to Save Excel")
-        if not save_dir:
-            QMessageBox.warning(self, "No Directory Selected", "Please select a directory.")
+    def load_excel_data(self):
+        file_dialog = QFileDialog(self)
+        file_path, _ = file_dialog.getOpenFileName(self, "Open Excel File", "", "Excel Files (*.xlsx)")
+        if not file_path:
+            QMessageBox.critical(self, "Error", "No Excel file selected.")
             return
 
-        excel_file_path = os.path.join(save_dir, "database_with_barcodes.xlsx")
+        try:
+            self.inventory_df = pd.read_excel(file_path)
+            if 'Item Code' not in self.inventory_df.columns or 'Description' not in self.inventory_df.columns:
+                raise ValueError("Excel file must have 'Item Code' and 'Description' columns.")
+            QMessageBox.information(self, "Success", "Excel file loaded successfully.")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to load Excel file: {e}")
 
-        # Create new workbook
-        wb = Workbook()
-        ws = wb.active
-        ws.append(['Item Code', 'Description', 'Barcode'])
+    def process_item(self):
+        item_code = self.item_code_entry.text().strip().lower()
+        if not item_code:
+            return
 
-        # Loop through the table and collect item codes and descriptions
-        for row in range(self.table.rowCount()):
-            item_code = self.table.item(row, 0).text().strip()
-            description = self.table.item(row, 1).text().strip()
+        match = self.inventory_df[self.inventory_df['Item Code'].str.lower() == item_code]
+        if not match.empty:
+            description = match['Description'].values[0]
+            if self.mode == "Check In":
+                if item_code in self.items:
+                    if self.items[item_code]['Status'] == "Checked Out":
+                        self.items[item_code]['Status'] = "Checked In"
+                    else:
+                        self.items[item_code]['Quantity'] += 1
+                else:
+                    self.items[item_code] = {'Description': description, 'Status': "Checked In", 'Quantity': 1}
+            else:
+                if item_code in self.items:
+                    if self.items[item_code]['Status'] == "Checked In":
+                        self.items[item_code]['Status'] = "Checked Out"
+                    else:
+                        self.items[item_code]['Quantity'] += 1
+                else:
+                    self.items[item_code] = {'Description': description, 'Status': "Checked Out", 'Quantity': 1}
 
-            if item_code:
-                ws.append([item_code, description])
+            self.update_table()
+        else:
+            QMessageBox.critical(self, "Error", "Item code not found in the Excel file.")
 
-                # Generate barcode
-                barcode_image = code128.image(item_code)
-                image_stream = io.BytesIO()
-                barcode_image.save(image_stream, format='PNG')
-                image_stream.seek(0)
+    def update_table(self):
+        self.table.setRowCount(0)  # Clear the table
+        for i, (item_code, item_info) in enumerate(self.items.items()):
+            self.table.insertRow(i)
+            self.table.setItem(i, 0, QTableWidgetItem(item_code))
+            self.table.setItem(i, 1, QTableWidgetItem(item_info['Description']))
+            self.table.setItem(i, 2, QTableWidgetItem(item_info['Status']))
+            self.table.setItem(i, 3, QTableWidgetItem(str(item_info['Quantity'])))
 
-                img = OpenpyxlImage(image_stream)
-                cell_address = f'C{ws.max_row}'  # Place image in the third column
-                img.anchor = cell_address
-                ws.add_image(img)
+    def export_to_excel(self):
+        if not self.items:
+            QMessageBox.critical(self, "Error", "No items to export.")
+            return
 
-                # Adjust row height for barcode
-                ws.row_dimensions[ws.max_row].height = 90
+        workbook = Workbook()
+        worksheet = workbook.active
+        worksheet.append(["Item Code", "Description", "Status", "Quantity"])
 
-        wb.save(excel_file_path)
-        QMessageBox.information(self, "Success", f"Data saved to {excel_file_path}")
+        for item_code, item_info in self.items.items():
+            worksheet.append([item_code, item_info['Description'], item_info['Status'], item_info['Quantity']])
 
-    def scan_barcode(self):
-        # Get the path of scan.py correctly based on whether it's running as an .exe or a script
-        base_path = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
-        scan_script_path = os.path.join(base_path, 'scan.py')
+        file_dialog = QFileDialog(self)
+        file_path, _ = file_dialog.getSaveFileName(self, "Save Excel File", "", "Excel Files (*.xlsx)")
+        if not file_path:
+            return
 
-        os.system(f'python "{scan_script_path}"')  # This calls the external script for scanning
+        try:
+            workbook.save(file_path)
+            QMessageBox.information(self, "Success", f"Data exported to {file_path} successfully.")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to export to Excel: {e}")
 
-# Application entry point
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = BarcodeApp()
