@@ -1,0 +1,18 @@
+# Required packages for ExoidTrackr
+
+# For barcode scanning
+opencv-python
+opencv-python-headless
+
+# For GUI development (if you're using PyQt)
+PyQt5
+
+# Other dependencies (add any other libraries you use in your code)
+pandas       # For data management
+numpy        # For numerical operations
+requests     # For handling HTTP requests (if applicable)
+
+# If you're using SQLite for database management
+sqlite3
+
+# Include any other libraries as needed
