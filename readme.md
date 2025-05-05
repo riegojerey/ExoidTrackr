@@ -1,6 +1,6 @@
 # ExoidTrackr
 
-**ExoidTrackr** is a powerful tool-tracking application that uses barcode scanning to help you efficiently manage your tool inventory. Ideal for workshops, construction sites, and personal tool collections, ExoidTrackr keeps everything organized and easily accessible.
+**ExoidTrackr** is a tool-tracking application that uses barcode scanning to help you efficiently manage your tool inventory. Ideal for workshops, construction sites, and personal tool collections, ExoidTrackr keeps everything organized and easily accessible.
 
 ## Features
 
